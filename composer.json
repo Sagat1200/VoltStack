@@ -1,0 +1,48 @@
+{
+    "name": "voltstack/framework",
+    "description": "High-performance modular PHP framework.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "voltstack",
+        "framework",
+        "php",
+        "fullstack"
+    ],
+    "authors": [
+        {
+            "name": "Francisco J. Morales",
+            "email": "francisco.morales@voltstack.net"
+        }
+    ],
+    "homepage": "https://voltstack.net",
+    "require": {
+        "php": "^8.3",
+        "psr/container": "^2.0"
+    },
+    "autoload": {
+        "files": [
+            "src/Helper/helper.php"
+        ],
+        "psr-4": {
+            "Quantum\\": "src/Quantum/",
+            "VoltStack\\Platform\\": "src/Platform/",
+            "VoltStack\\Facades\\": "src/Facades/",
+            "VoltStack\\Helper\\": "src/Helper/",
+            "VoltStack\\Support\\": "src/Support/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "VoltStack\\Framework\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1.0-dev"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^13.1"
+    }
+}
