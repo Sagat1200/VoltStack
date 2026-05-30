@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Quantum\Validation;
 
 use Closure;
+use Quantum\Validation\Conditions\CompositeCondition;
+use Quantum\Validation\Conditions\Contracts\DeclarativeConditionInterface;
+use Quantum\Validation\Conditions\WhenFieldBuilder;
 use Quantum\Validation\Rules\AcceptedIfRule;
 use Quantum\Validation\Rules\AcceptedRule;
 use Quantum\Validation\Rules\AlphaDashRule;
@@ -32,6 +35,8 @@ use Quantum\Validation\Rules\MinRule;
 use Quantum\Validation\Rules\NullableRule;
 use Quantum\Validation\Rules\NotRegexRule;
 use Quantum\Validation\Rules\NumericRule;
+use Quantum\Validation\Rules\PresentRule;
+use Quantum\Validation\Rules\ProhibitedRule;
 use Quantum\Validation\Rules\ProhibitedIfRule;
 use Quantum\Validation\Rules\RegexRule;
 use Quantum\Validation\Rules\RequiredRule;
@@ -79,8 +84,12 @@ final class Rule
         return new AcceptedRule();
     }
 
-    public static function acceptedIf(bool|callable|string $condition, mixed ...$expectedValues): AcceptedIfRule
+    public static function acceptedIf(bool|callable|string|DeclarativeConditionInterface $condition, mixed ...$expectedValues): AcceptedIfRule
     {
+        if ($condition instanceof DeclarativeConditionInterface) {
+            return new AcceptedIfRule($condition);
+        }
+
         if (is_callable($condition) && !is_string($condition)) {
             $condition = Closure::fromCallable($condition);
         }
@@ -96,8 +105,12 @@ final class Rule
         return new DeclinedRule();
     }
 
-    public static function declinedIf(bool|callable|string $condition, mixed ...$expectedValues): DeclinedIfRule
+    public static function declinedIf(bool|callable|string|DeclarativeConditionInterface $condition, mixed ...$expectedValues): DeclinedIfRule
     {
+        if ($condition instanceof DeclarativeConditionInterface) {
+            return new DeclinedIfRule($condition);
+        }
+
         if (is_callable($condition) && !is_string($condition)) {
             $condition = Closure::fromCallable($condition);
         }
@@ -204,13 +217,27 @@ final class Rule
         return new NullableRule();
     }
 
+    public static function present(): PresentRule
+    {
+        return new PresentRule();
+    }
+
+    public static function prohibited(): ProhibitedRule
+    {
+        return new ProhibitedRule();
+    }
+
     public static function required(): RequiredRule
     {
         return new RequiredRule();
     }
 
-    public static function requiredIf(bool|callable|string $condition, mixed ...$expectedValues): RequiredIfRule
+    public static function requiredIf(bool|callable|string|DeclarativeConditionInterface $condition, mixed ...$expectedValues): RequiredIfRule
     {
+        if ($condition instanceof DeclarativeConditionInterface) {
+            return new RequiredIfRule($condition);
+        }
+
         if (is_callable($condition) && !is_string($condition)) {
             $condition = Closure::fromCallable($condition);
         }
@@ -221,8 +248,12 @@ final class Rule
         );
     }
 
-    public static function requiredUnless(bool|callable|string $condition, mixed ...$expectedValues): RequiredUnlessRule
+    public static function requiredUnless(bool|callable|string|DeclarativeConditionInterface $condition, mixed ...$expectedValues): RequiredUnlessRule
     {
+        if ($condition instanceof DeclarativeConditionInterface) {
+            return new RequiredUnlessRule($condition);
+        }
+
         if (is_callable($condition) && !is_string($condition)) {
             $condition = Closure::fromCallable($condition);
         }
@@ -249,8 +280,12 @@ final class Rule
         return new RequiredWithoutRule(self::normalizeFieldArguments($fields));
     }
 
-    public static function prohibitedIf(bool|callable|string $condition, mixed ...$expectedValues): ProhibitedIfRule
+    public static function prohibitedIf(bool|callable|string|DeclarativeConditionInterface $condition, mixed ...$expectedValues): ProhibitedIfRule
     {
+        if ($condition instanceof DeclarativeConditionInterface) {
+            return new ProhibitedIfRule($condition);
+        }
+
         if (is_callable($condition) && !is_string($condition)) {
             $condition = Closure::fromCallable($condition);
         }
@@ -264,6 +299,21 @@ final class Rule
     public static function same(string $otherField): SameRule
     {
         return new SameRule($otherField);
+    }
+
+    public static function when(string $field): WhenFieldBuilder
+    {
+        return new WhenFieldBuilder($field);
+    }
+
+    public static function allOf(DeclarativeConditionInterface ...$conditions): CompositeCondition
+    {
+        return new CompositeCondition('all', self::normalizeConditions($conditions));
+    }
+
+    public static function anyOf(DeclarativeConditionInterface ...$conditions): CompositeCondition
+    {
+        return new CompositeCondition('any', self::normalizeConditions($conditions));
     }
 
     public static function confirmed(?string $confirmationField = null): ConfirmedRule
@@ -333,6 +383,22 @@ final class Rule
         return array_values(array_filter(
             array_map(static fn(mixed $value): string => (string) $value, $arguments),
             static fn(string $value): bool => $value !== '',
+        ));
+    }
+
+    /**
+     * @param array<int, mixed> $conditions
+     * @return array<int, DeclarativeConditionInterface>
+     */
+    protected static function normalizeConditions(array $conditions): array
+    {
+        if (count($conditions) === 1 && is_array($conditions[0])) {
+            $conditions = array_values($conditions[0]);
+        }
+
+        return array_values(array_filter(
+            $conditions,
+            static fn(mixed $condition): bool => $condition instanceof DeclarativeConditionInterface,
         ));
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Quantum\Validation\Rules;
 
 use Closure;
+use Quantum\Validation\Conditions\Contracts\DeclarativeConditionInterface;
 use Quantum\Validation\Contracts\RuleInterface;
 use Quantum\Validation\Rules\Concerns\ResolvesDependentFields;
 use Quantum\Validation\ValidationRuleContext;
@@ -17,7 +18,7 @@ abstract class AbstractConditionalRule implements RuleInterface
      * @param array<int, scalar|null> $expectedValues
      */
     public function __construct(
-        protected bool|Closure|string $condition,
+        protected bool|Closure|string|DeclarativeConditionInterface $condition,
         protected array $expectedValues = [],
     ) {}
 
@@ -29,6 +30,10 @@ abstract class AbstractConditionalRule implements RuleInterface
 
         if ($this->condition instanceof Closure) {
             return (bool) ($this->condition)($context);
+        }
+
+        if ($this->condition instanceof DeclarativeConditionInterface) {
+            return ($this->condition)($context);
         }
 
         $otherValue = $this->otherValue($context);
@@ -44,6 +49,10 @@ abstract class AbstractConditionalRule implements RuleInterface
 
     protected function otherField(ValidationRuleContext $context): ?string
     {
+        if ($this->condition instanceof DeclarativeConditionInterface) {
+            return $this->condition->messageOther($context);
+        }
+
         if (!is_string($this->condition)) {
             return null;
         }
@@ -64,6 +73,10 @@ abstract class AbstractConditionalRule implements RuleInterface
 
     protected function expectedValuesAsString(): string
     {
+        if ($this->condition instanceof DeclarativeConditionInterface) {
+            return $this->condition->messageValue();
+        }
+
         return implode(', ', array_map(static fn(mixed $value): string => (string) $value, $this->expectedValues));
     }
 
@@ -76,7 +89,9 @@ abstract class AbstractConditionalRule implements RuleInterface
         }
 
         return [
-            'other' => $this->attributeLabel($context, $otherField),
+            'other' => $this->condition instanceof DeclarativeConditionInterface
+                ? $otherField
+                : $this->attributeLabel($context, $otherField),
             $valueKey => $this->expectedValuesAsString(),
         ];
     }

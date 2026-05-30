@@ -1193,6 +1193,22 @@ final class ValidatorTest extends TestCase
     public function test_validator_supports_semantic_rule_objects_and_expressive_arguments(): void
     {
         $validator = new Validator();
+        $published = Rule::when('status')->is('published');
+        $manualDelivery = Rule::when('delivery_mode')->isNot('auto');
+        $internalVisibility = Rule::when('visibility')->notIn('public', 'private');
+        $publishedOrArchived = Rule::when('status')->in('published', 'archived');
+        $reviewerExists = Rule::when('reviewer_id')->exists();
+        $failureMissing = Rule::when('failure_code')->missing();
+        $notesFilled = Rule::when('notes')->filled();
+        $couponEmpty = Rule::when('coupon')->empty();
+        $manualAndRestricted = Rule::allOf(
+            Rule::when('delivery_mode')->is('manual'),
+            Rule::when('visibility')->notIn('public', 'private'),
+        );
+        $archivedOrMissingCoupon = Rule::anyOf(
+            Rule::when('status')->is('archived'),
+            Rule::when('coupon')->missing(),
+        );
 
         $validated = $validator->validate([
             'terms' => 'yes',
@@ -1203,6 +1219,16 @@ final class ValidatorTest extends TestCase
             'username' => 'voltstack',
             'status' => 'published',
             'visibility' => 'public',
+            'delivery_mode' => 'manual',
+            'delivery_window' => '9-5',
+            'reviewer_id' => 42,
+            'approval_code' => 'APR-001',
+            'override_reason' => 'manual review',
+            'meta' => null,
+            'notes' => 'ok',
+            'follow_up_ack' => 'yes',
+            'coupon' => '',
+            'coupon_guard' => 'yes',
             'marketing_opt_in' => 'yes',
             'cancel_newsletter' => 'off',
             'password' => 'secret123',
@@ -1212,6 +1238,8 @@ final class ValidatorTest extends TestCase
             'internal_code' => 'VS-001',
             'support_code' => 'PRM-001',
             'review_notes' => 'checked',
+            'compliance_check' => 'yes',
+            'release_check' => 'yes',
             'items' => [
                 [
                     'value' => 'alpha',
@@ -1222,17 +1250,30 @@ final class ValidatorTest extends TestCase
             'terms' => [Rule::accepted()],
             'opt_out' => [Rule::declined()],
             'nickname' => [Rule::nullable(), Rule::string(), Rule::max(10)],
+            'meta' => [Rule::present()],
+            'legacy_token' => [Rule::prohibited()],
             'phone' => [Rule::requiredWith(['email'])],
             'username' => [Rule::requiredWithout('display_name')],
             'visibility' => [Rule::in('public', 'private')],
-            'marketing_opt_in' => [Rule::acceptedIf('status', 'published')],
-            'cancel_newsletter' => [Rule::declinedIf(static fn(ValidationRuleContext $context): bool => ($context->data()['status'] ?? null) === 'published')],
+            'delivery_window' => [$manualDelivery->required()],
+            'internal_notes' => [$internalVisibility->prohibited()],
+            'approval_code' => [$reviewerExists->thenRequired()],
+            'retry_reason' => [$failureMissing->thenProhibited()],
+            'follow_up_ack' => [$notesFilled->thenAccepted()],
+            'coupon_audit' => [$couponEmpty->thenProhibited()],
+            'override_reason' => [$manualDelivery->andWhen('reviewer_id')->exists()->thenRequired()],
+            'security_flag' => [$manualAndRestricted->thenProhibited()],
+            'coupon_guard' => [$archivedOrMissingCoupon->thenAccepted()],
+            'marketing_opt_in' => [Rule::acceptedIf($published)],
+            'cancel_newsletter' => [Rule::when('status')->is('published')->thenDeclined()],
             'password' => [Rule::confirmed()],
             'pin' => [Rule::same('pin_repeat')],
             'internal_code' => [Rule::requiredIf('status', 'published')],
             'support_code' => [Rule::requiredUnless('visibility', 'public')],
             'review_notes' => [Rule::requiredUnless(static fn(ValidationRuleContext $context): bool => ($context->data()['status'] ?? null) === 'draft')],
             'published_at' => [Rule::prohibitedIf('status', 'draft')],
+            'compliance_check' => [$published->accepted()],
+            'release_check' => [$publishedOrArchived->accepted()],
             'items.*.value' => [Rule::confirmed('items.*.value_repeat')],
         ]);
 
@@ -1245,6 +1286,16 @@ final class ValidatorTest extends TestCase
             'username' => 'voltstack',
             'status' => 'published',
             'visibility' => 'public',
+            'delivery_mode' => 'manual',
+            'delivery_window' => '9-5',
+            'reviewer_id' => 42,
+            'approval_code' => 'APR-001',
+            'override_reason' => 'manual review',
+            'meta' => null,
+            'notes' => 'ok',
+            'follow_up_ack' => 'yes',
+            'coupon' => '',
+            'coupon_guard' => 'yes',
             'marketing_opt_in' => 'yes',
             'cancel_newsletter' => 'off',
             'password' => 'secret123',
@@ -1254,6 +1305,8 @@ final class ValidatorTest extends TestCase
             'internal_code' => 'VS-001',
             'support_code' => 'PRM-001',
             'review_notes' => 'checked',
+            'compliance_check' => 'yes',
+            'release_check' => 'yes',
             'items' => [
                 [
                     'value' => 'alpha',
@@ -1266,6 +1319,21 @@ final class ValidatorTest extends TestCase
     public function test_validator_throws_errors_for_semantic_rule_objects_and_expressive_arguments(): void
     {
         $validator = new Validator();
+        $draftOrPublished = Rule::when('status')->in('draft', 'published');
+        $manualDelivery = Rule::when('delivery_mode')->isNot('auto');
+        $restrictedVisibility = Rule::when('visibility')->notIn('public', 'private');
+        $reviewerExists = Rule::when('reviewer_id')->exists();
+        $failureMissing = Rule::when('failure_code')->missing();
+        $notesFilled = Rule::when('notes')->filled();
+        $couponEmpty = Rule::when('coupon')->empty();
+        $manualAndRestricted = Rule::allOf(
+            Rule::when('delivery_mode')->is('manual'),
+            Rule::when('visibility')->notIn('public', 'private'),
+        );
+        $archivedOrMissingCoupon = Rule::anyOf(
+            Rule::when('status')->is('archived'),
+            Rule::when('coupon')->missing(),
+        );
 
         try {
             $validator->validate([
@@ -1275,14 +1343,27 @@ final class ValidatorTest extends TestCase
                 'email' => 'user@example.com',
                 'status' => 'draft',
                 'visibility' => 'friends-only',
+                'delivery_mode' => 'manual',
+                'reviewer_id' => 7,
                 'marketing_opt_in' => 'no',
                 'cancel_newsletter' => 'yes',
+                'legacy_token' => 'legacy-123',
+                'internal_notes' => 'solo interno',
+                'retry_reason' => 'pendiente',
+                'notes' => 'requiere seguimiento',
+                'follow_up_ack' => 'no',
+                'override_reason' => '',
+                'coupon_guard' => 'no',
+                'coupon_audit' => 'debe ocultarse',
+                'security_flag' => 'alerta',
                 'password' => 'secret123',
                 'password_confirmation' => 'different',
                 'pin' => '1234',
                 'pin_repeat' => '0000',
                 'flagged' => true,
                 'published_at' => '2026-05-29',
+                'compliance_check' => 'no',
+                'release_check' => 'no',
                 'items' => [
                     [
                         'value' => 'alpha',
@@ -1293,26 +1374,52 @@ final class ValidatorTest extends TestCase
                 'terms' => [Rule::accepted()],
                 'opt_out' => [Rule::declined()],
                 'nickname' => [Rule::nullable(), Rule::string(), Rule::max(10)],
+                'meta' => [Rule::present()],
+                'legacy_token' => [Rule::prohibited()],
                 'phone' => [Rule::requiredWith('email')],
                 'username' => [Rule::requiredWithout('display_name')],
                 'visibility' => [Rule::in('public', 'private')],
-                'marketing_opt_in' => [Rule::acceptedIf('status', 'draft', 'published')],
-                'cancel_newsletter' => [Rule::declinedIf('status', 'draft', 'published')],
+                'delivery_window' => [$manualDelivery->required()],
+                'internal_notes' => [$restrictedVisibility->prohibited()],
+                'approval_code' => [$reviewerExists->thenRequired()],
+                'retry_reason' => [$failureMissing->thenProhibited()],
+                'follow_up_ack' => [$notesFilled->thenAccepted()],
+                'coupon_audit' => [$couponEmpty->thenProhibited()],
+                'override_reason' => [$manualDelivery->andWhen('reviewer_id')->exists()->thenRequired()],
+                'security_flag' => [$manualAndRestricted->thenProhibited()],
+                'coupon_guard' => [$archivedOrMissingCoupon->thenAccepted()],
+                'marketing_opt_in' => [Rule::acceptedIf($draftOrPublished)],
+                'cancel_newsletter' => [$draftOrPublished->thenDeclined()],
                 'password' => [Rule::confirmed()],
                 'pin' => [Rule::same('pin_repeat')],
-                'internal_code' => [Rule::requiredIf('status', 'draft', 'published')],
+                'internal_code' => [$draftOrPublished->required()],
                 'support_code' => [Rule::requiredUnless('visibility', 'public', 'private')],
                 'review_notes' => [Rule::requiredIf(static fn(ValidationRuleContext $context): bool => ($context->data()['flagged'] ?? false) === true)],
                 'audit_reason' => [Rule::requiredUnless(static fn(ValidationRuleContext $context): bool => ($context->data()['status'] ?? null) === 'archived')],
-                'published_at' => [Rule::prohibitedIf('status', 'draft')],
+                'published_at' => [Rule::when('status')->is('draft')->prohibited()],
+                'compliance_check' => [$draftOrPublished->accepted()],
+                'release_check' => [Rule::when('status')->in('draft', 'archived')->accepted()],
                 'items.*.value' => [Rule::confirmed('items.*.value_repeat')],
             ], [
                 'terms.accepted' => 'Debes aceptar :attribute.',
                 'opt_out.declined' => 'El campo :attribute debe estar desactivado.',
+                'meta.present' => 'Debes enviar :attribute.',
+                'legacy_token.prohibited' => 'El campo :attribute esta prohibido.',
                 'phone.required_with' => 'El campo :attribute es obligatorio cuando alguno de :values esta presente.',
                 'username.required_without' => 'El campo :attribute es obligatorio cuando falta alguno de :values.',
                 'visibility.in' => 'La :attribute seleccionada no es valida.',
+                'delivery_window.required_if' => 'El campo :attribute es obligatorio cuando la entrega no es automatica.',
+                'internal_notes.prohibited_if' => 'El campo :attribute esta prohibido cuando la visibilidad no es publica o privada.',
+                'approval_code.required_if' => 'El campo :attribute es obligatorio cuando existe revisor.',
+                'retry_reason.prohibited_if' => 'El campo :attribute esta prohibido mientras no exista codigo de error.',
+                'follow_up_ack.accepted_if' => 'Debes aceptar :attribute cuando existen notas.',
+                'coupon_audit.prohibited_if' => 'El campo :attribute esta prohibido cuando el cupon esta vacio.',
+                'override_reason.required_if' => 'El campo :attribute es obligatorio cuando la entrega es manual y existe revisor.',
+                'security_flag.prohibited_if' => 'El campo :attribute esta prohibido cuando la entrega es manual y la visibilidad no es publica o privada.',
+                'coupon_guard.accepted_if' => 'Debes aceptar :attribute cuando el estado es archivado o falta el cupon.',
                 'marketing_opt_in.accepted_if' => 'Debes aceptar :attribute cuando :other es :value.',
+                'compliance_check.accepted_if' => 'Debes aceptar :attribute cuando :other es :value.',
+                'release_check.accepted_if' => 'Debes aceptar :attribute cuando :other es :value.',
                 'cancel_newsletter.declined_if' => 'El campo :attribute debe estar desactivado cuando :other es :value.',
                 'password.confirmed' => 'La confirmacion de :attribute no coincide.',
                 'pin.same' => 'El campo :attribute debe coincidir con :other.',
@@ -1325,8 +1432,19 @@ final class ValidatorTest extends TestCase
             ], [
                 'terms' => 'terminos',
                 'opt_out' => 'baja',
+                'meta' => 'meta',
+                'legacy_token' => 'token legado',
                 'phone' => 'telefono',
                 'username' => 'usuario',
+                'delivery_window' => 'ventana de entrega',
+                'internal_notes' => 'notas internas',
+                'approval_code' => 'codigo de aprobacion',
+                'retry_reason' => 'motivo de reintento',
+                'follow_up_ack' => 'confirmacion de seguimiento',
+                'coupon_audit' => 'auditoria de cupon',
+                'override_reason' => 'motivo de override',
+                'security_flag' => 'bandera de seguridad',
+                'coupon_guard' => 'guardia de cupon',
                 'visibility' => 'visibilidad',
                 'marketing_opt_in' => 'suscripcion',
                 'cancel_newsletter' => 'cancelacion',
@@ -1347,9 +1465,20 @@ final class ValidatorTest extends TestCase
             self::assertSame([
                 'terms' => ['Debes aceptar terminos.'],
                 'opt_out' => ['El campo baja debe estar desactivado.'],
+                'meta' => ['Debes enviar meta.'],
+                'legacy_token' => ['El campo token legado esta prohibido.'],
                 'phone' => ['El campo telefono es obligatorio cuando alguno de email esta presente.'],
                 'username' => ['El campo usuario es obligatorio cuando falta alguno de display_name.'],
                 'visibility' => ['La visibilidad seleccionada no es valida.'],
+                'delivery_window' => ['El campo ventana de entrega es obligatorio cuando la entrega no es automatica.'],
+                'internal_notes' => ['El campo notas internas esta prohibido cuando la visibilidad no es publica o privada.'],
+                'approval_code' => ['El campo codigo de aprobacion es obligatorio cuando existe revisor.'],
+                'retry_reason' => ['El campo motivo de reintento esta prohibido mientras no exista codigo de error.'],
+                'follow_up_ack' => ['Debes aceptar confirmacion de seguimiento cuando existen notas.'],
+                'coupon_audit' => ['El campo auditoria de cupon esta prohibido cuando el cupon esta vacio.'],
+                'override_reason' => ['El campo motivo de override es obligatorio cuando la entrega es manual y existe revisor.'],
+                'security_flag' => ['El campo bandera de seguridad esta prohibido cuando la entrega es manual y la visibilidad no es publica o privada.'],
+                'coupon_guard' => ['Debes aceptar guardia de cupon cuando el estado es archivado o falta el cupon.'],
                 'marketing_opt_in' => ['Debes aceptar suscripcion cuando estado es draft, published.'],
                 'cancel_newsletter' => ['El campo cancelacion debe estar desactivado cuando estado es draft, published.'],
                 'password' => ['La confirmacion de contrasena no coincide.'],
@@ -1359,6 +1488,8 @@ final class ValidatorTest extends TestCase
                 'review_notes' => ['El campo notas de revision es obligatorio cuando el registro esta marcado.'],
                 'audit_reason' => ['El campo motivo de auditoria es obligatorio salvo que el estado sea archivado.'],
                 'published_at' => ['El campo fecha de publicacion esta prohibido cuando estado es draft.'],
+                'compliance_check' => ['Debes aceptar compliance_check cuando estado es draft, published.'],
+                'release_check' => ['Debes aceptar release_check cuando estado es draft, archived.'],
                 'items.0.value' => ['La confirmacion de valor del item no coincide.'],
             ], $exception->errors());
         }
