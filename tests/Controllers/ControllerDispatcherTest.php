@@ -47,6 +47,34 @@ final class ControllerDispatcherTest extends TestCase
         self::assertInstanceOf(ControllerDispatcher::class, $app->controllers());
         self::assertSame($app->controllers(), $app->container()->make(ControllerDispatcher::class));
     }
+
+    public function test_dispatcher_resolves_parameter_binding_before_invoking_handler(): void
+    {
+        $app = $this->createApplication();
+        $app->bindRouteParameter('user', static fn (string $value): BoundUser => new BoundUser($value, 'parameter'));
+
+        $route = new Route(['GET'], '/users/{user}', BoundUserController::class . '@show');
+        $resolved = new ResolvedRoute($route, ['user' => '24']);
+        $request = Request::create('GET', '/users/24')->withAttribute('route', $route);
+
+        $result = $app->controllers()->dispatchResolvedRoute($resolved, $request);
+
+        self::assertSame('parameter:24', $result);
+    }
+
+    public function test_dispatcher_resolves_type_binding_when_parameter_name_binding_is_missing(): void
+    {
+        $app = $this->createApplication();
+        $app->bindRouteType(BoundUser::class, static fn (string $value): BoundUser => new BoundUser($value, 'type'));
+
+        $route = new Route(['GET'], '/members/{member}', TypeBoundUserController::class . '@show');
+        $resolved = new ResolvedRoute($route, ['member' => '35']);
+        $request = Request::create('GET', '/members/35')->withAttribute('route', $route);
+
+        $result = $app->controllers()->dispatchResolvedRoute($resolved, $request);
+
+        self::assertSame('type:35', $result);
+    }
 }
 
 final class DispatcherController
@@ -54,5 +82,30 @@ final class DispatcherController
     public function show(string $id): string
     {
         return 'post:' . $id;
+    }
+}
+
+final class BoundUserController
+{
+    public function show(BoundUser $user): string
+    {
+        return $user->source . ':' . $user->id;
+    }
+}
+
+final class TypeBoundUserController
+{
+    public function show(BoundUser $member): string
+    {
+        return $member->source . ':' . $member->id;
+    }
+}
+
+final class BoundUser
+{
+    public function __construct(
+        public string $id,
+        public string $source,
+    ) {
     }
 }

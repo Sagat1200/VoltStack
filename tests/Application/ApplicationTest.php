@@ -7,6 +7,7 @@ namespace VoltStack\Framework\Tests\Application;
 use Quantum\Bootstrap\ServiceProvider;
 use Quantum\Config\ConfigRepository;
 use Quantum\Controllers\ControllerDispatcher;
+use Quantum\Routing\RouteBindingRegistry;
 use VoltStack\Framework\Tests\TestCase;
 use VoltStack\Platform\Application;
 
@@ -62,6 +63,13 @@ final class ApplicationTest extends TestCase
         $app = $this->createApplication();
 
         self::assertInstanceOf(ControllerDispatcher::class, $app->controllers());
+    }
+
+    public function test_application_exposes_route_binding_registry(): void
+    {
+        $app = $this->createApplication();
+
+        self::assertInstanceOf(RouteBindingRegistry::class, $app->bindings());
     }
 }
 

@@ -59,6 +59,18 @@ final class HttpKernelTest extends TestCase
         self::assertSame(404, $response->status());
         self::assertSame('Not Found', $response->content());
     }
+
+    public function test_kernel_returns_not_found_when_route_binding_cannot_be_resolved(): void
+    {
+        $app = $this->createApplication();
+        $app->bindRouteType(BoundPost::class, static fn (string $value): ?BoundPost => null);
+        $app->router()->get('/posts/{post}', BoundPostController::class . '@show');
+
+        $response = $app->kernel()->handle(Request::create('GET', '/posts/999'));
+
+        self::assertSame(404, $response->status());
+        self::assertSame('Route binding [post] could not be resolved.', $response->content());
+    }
 }
 
 final class ControllerHandler
@@ -76,5 +88,21 @@ final class UppercaseMiddleware implements MiddlewareInterface
         $response = $next($request);
 
         return Response::make(strtoupper($response->content()), $response->status(), $response->headers());
+    }
+}
+
+final class BoundPostController
+{
+    public function show(BoundPost $post): string
+    {
+        return $post->id;
+    }
+}
+
+final class BoundPost
+{
+    public function __construct(
+        public string $id,
+    ) {
     }
 }

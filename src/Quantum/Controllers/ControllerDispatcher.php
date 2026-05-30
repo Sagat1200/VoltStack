@@ -9,6 +9,7 @@ use Psr\Container\ContainerInterface;
 use Quantum\Http\Request;
 use Quantum\Routing\ResolvedRoute;
 use Quantum\Routing\Route;
+use Quantum\Routing\RouteBindingRegistry;
 use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -19,8 +20,8 @@ final class ControllerDispatcher
 {
     public function __construct(
         protected ContainerInterface $container,
-    ) {
-    }
+        protected ?RouteBindingRegistry $bindings = null,
+    ) {}
 
     public function dispatchResolvedRoute(ResolvedRoute $resolved, Request $request): mixed
     {
@@ -87,7 +88,12 @@ final class ControllerDispatcher
         $name = $parameter->getName();
 
         if (array_key_exists($name, $routeParameters)) {
-            return $routeParameters[$name];
+            return $this->routeBindings()->resolve(
+                $parameter,
+                $routeParameters[$name],
+                $request,
+                $request->attribute('route')
+            );
         }
 
         $type = $parameter->getType();
@@ -113,5 +119,21 @@ final class ControllerDispatcher
         throw new RuntimeException(
             sprintf('Unable to resolve argument [%s] for route handler.', $name)
         );
+    }
+
+    protected function routeBindings(): RouteBindingRegistry
+    {
+        if ($this->bindings instanceof RouteBindingRegistry) {
+            return $this->bindings;
+        }
+
+        if ($this->container->has(RouteBindingRegistry::class)) {
+            /** @var RouteBindingRegistry $bindings */
+            $bindings = $this->container->get(RouteBindingRegistry::class);
+
+            return $bindings;
+        }
+
+        return new RouteBindingRegistry();
     }
 }
