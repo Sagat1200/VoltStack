@@ -94,6 +94,7 @@ final class Validator implements ValidatorInterface
                                 $value,
                                 $present,
                                 $data,
+                                $attributes,
                                 $ruleName,
                                 function (?string $message = null, array $replacements = []) use ($fail, $rule, $ruleName): bool {
                                     return $fail($rule->name(), $ruleName, $replacements, $message);

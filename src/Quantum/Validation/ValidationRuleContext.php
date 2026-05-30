@@ -19,6 +19,7 @@ final class ValidationRuleContext
         protected mixed $value,
         protected bool $present,
         protected array $data,
+        protected array $attributes,
         protected string $rule,
         protected $fail,
     ) {}
@@ -48,6 +49,11 @@ final class ValidationRuleContext
         return $this->data;
     }
 
+    public function attributes(): array
+    {
+        return $this->attributes;
+    }
+
     public function rule(): string
     {
         return $this->rule;
@@ -62,6 +68,11 @@ final class ValidationRuleContext
     public function failed(): bool
     {
         return $this->failed;
+    }
+
+    public function skipRemainingRules(): void
+    {
+        $this->shouldBreak = true;
     }
 
     public function shouldBreak(): bool

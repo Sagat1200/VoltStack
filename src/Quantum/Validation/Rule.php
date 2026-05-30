@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace Quantum\Validation;
 
+use Closure;
+use Quantum\Validation\Rules\AcceptedIfRule;
+use Quantum\Validation\Rules\AcceptedRule;
 use Quantum\Validation\Rules\AlphaDashRule;
 use Quantum\Validation\Rules\AsciiRule;
 use Quantum\Validation\Rules\ArrayRule;
 use Quantum\Validation\Rules\BetweenRule;
 use Quantum\Validation\Rules\BooleanRule;
 use Quantum\Validation\Rules\CallbackRule;
+use Quantum\Validation\Rules\ConfirmedRule;
 use Quantum\Validation\Rules\DateRule;
+use Quantum\Validation\Rules\DeclinedIfRule;
+use Quantum\Validation\Rules\DeclinedRule;
 use Quantum\Validation\Rules\DigitsRule;
 use Quantum\Validation\Rules\EmailRule;
 use Quantum\Validation\Rules\EndsWithRule;
@@ -23,10 +29,17 @@ use Quantum\Validation\Rules\JsonRule;
 use Quantum\Validation\Rules\LowercaseRule;
 use Quantum\Validation\Rules\MaxRule;
 use Quantum\Validation\Rules\MinRule;
+use Quantum\Validation\Rules\NullableRule;
 use Quantum\Validation\Rules\NotRegexRule;
 use Quantum\Validation\Rules\NumericRule;
+use Quantum\Validation\Rules\ProhibitedIfRule;
 use Quantum\Validation\Rules\RegexRule;
 use Quantum\Validation\Rules\RequiredRule;
+use Quantum\Validation\Rules\RequiredIfRule;
+use Quantum\Validation\Rules\RequiredUnlessRule;
+use Quantum\Validation\Rules\RequiredWithRule;
+use Quantum\Validation\Rules\RequiredWithoutRule;
+use Quantum\Validation\Rules\SameRule;
 use Quantum\Validation\Rules\SizeRule;
 use Quantum\Validation\Rules\StartsWithRule;
 use Quantum\Validation\Rules\StringRule;
@@ -61,6 +74,40 @@ final class Rule
         return new BooleanRule();
     }
 
+    public static function accepted(): AcceptedRule
+    {
+        return new AcceptedRule();
+    }
+
+    public static function acceptedIf(bool|callable|string $condition, mixed ...$expectedValues): AcceptedIfRule
+    {
+        if (is_callable($condition) && !is_string($condition)) {
+            $condition = Closure::fromCallable($condition);
+        }
+
+        return new AcceptedIfRule(
+            $condition,
+            is_string($condition) ? self::normalizeListArguments($expectedValues) : [],
+        );
+    }
+
+    public static function declined(): DeclinedRule
+    {
+        return new DeclinedRule();
+    }
+
+    public static function declinedIf(bool|callable|string $condition, mixed ...$expectedValues): DeclinedIfRule
+    {
+        if (is_callable($condition) && !is_string($condition)) {
+            $condition = Closure::fromCallable($condition);
+        }
+
+        return new DeclinedIfRule(
+            $condition,
+            is_string($condition) ? self::normalizeListArguments($expectedValues) : [],
+        );
+    }
+
     public static function email(): EmailRule
     {
         return new EmailRule();
@@ -90,11 +137,11 @@ final class Rule
     }
 
     /**
-     * @param array<int, string|int|float|bool> $allowed
+     * @param mixed ...$allowed
      */
-    public static function in(array $allowed): InRule
+    public static function in(mixed ...$allowed): InRule
     {
-        return new InRule($allowed);
+        return new InRule(self::normalizeListArguments($allowed));
     }
 
     public static function integer(): IntegerRule
@@ -152,9 +199,76 @@ final class Rule
         return new RegexRule($pattern);
     }
 
+    public static function nullable(): NullableRule
+    {
+        return new NullableRule();
+    }
+
     public static function required(): RequiredRule
     {
         return new RequiredRule();
+    }
+
+    public static function requiredIf(bool|callable|string $condition, mixed ...$expectedValues): RequiredIfRule
+    {
+        if (is_callable($condition) && !is_string($condition)) {
+            $condition = Closure::fromCallable($condition);
+        }
+
+        return new RequiredIfRule(
+            $condition,
+            is_string($condition) ? self::normalizeListArguments($expectedValues) : [],
+        );
+    }
+
+    public static function requiredUnless(bool|callable|string $condition, mixed ...$expectedValues): RequiredUnlessRule
+    {
+        if (is_callable($condition) && !is_string($condition)) {
+            $condition = Closure::fromCallable($condition);
+        }
+
+        return new RequiredUnlessRule(
+            $condition,
+            is_string($condition) ? self::normalizeListArguments($expectedValues) : [],
+        );
+    }
+
+    /**
+     * @param mixed ...$fields
+     */
+    public static function requiredWith(mixed ...$fields): RequiredWithRule
+    {
+        return new RequiredWithRule(self::normalizeFieldArguments($fields));
+    }
+
+    /**
+     * @param mixed ...$fields
+     */
+    public static function requiredWithout(mixed ...$fields): RequiredWithoutRule
+    {
+        return new RequiredWithoutRule(self::normalizeFieldArguments($fields));
+    }
+
+    public static function prohibitedIf(bool|callable|string $condition, mixed ...$expectedValues): ProhibitedIfRule
+    {
+        if (is_callable($condition) && !is_string($condition)) {
+            $condition = Closure::fromCallable($condition);
+        }
+
+        return new ProhibitedIfRule(
+            $condition,
+            is_string($condition) ? self::normalizeListArguments($expectedValues) : [],
+        );
+    }
+
+    public static function same(string $otherField): SameRule
+    {
+        return new SameRule($otherField);
+    }
+
+    public static function confirmed(?string $confirmationField = null): ConfirmedRule
+    {
+        return new ConfirmedRule($confirmationField);
     }
 
     public static function size(int $size): SizeRule
@@ -188,5 +302,37 @@ final class Rule
     public static function uuid(): UuidRule
     {
         return new UuidRule();
+    }
+
+    /**
+     * @param array<int, mixed> $arguments
+     * @return array<int, scalar|null>
+     */
+    protected static function normalizeListArguments(array $arguments): array
+    {
+        if (count($arguments) === 1 && is_array($arguments[0])) {
+            $arguments = array_values($arguments[0]);
+        }
+
+        return array_values(array_filter(
+            $arguments,
+            static fn(mixed $value): bool => is_scalar($value) || $value === null,
+        ));
+    }
+
+    /**
+     * @param array<int, mixed> $arguments
+     * @return array<int, string>
+     */
+    protected static function normalizeFieldArguments(array $arguments): array
+    {
+        if (count($arguments) === 1 && is_array($arguments[0])) {
+            $arguments = array_values($arguments[0]);
+        }
+
+        return array_values(array_filter(
+            array_map(static fn(mixed $value): string => (string) $value, $arguments),
+            static fn(string $value): bool => $value !== '',
+        ));
     }
 }

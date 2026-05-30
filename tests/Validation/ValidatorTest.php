@@ -1189,4 +1189,178 @@ final class ValidatorTest extends TestCase
             ], $exception->errors());
         }
     }
+
+    public function test_validator_supports_semantic_rule_objects_and_expressive_arguments(): void
+    {
+        $validator = new Validator();
+
+        $validated = $validator->validate([
+            'terms' => 'yes',
+            'opt_out' => 'off',
+            'nickname' => null,
+            'email' => 'user@example.com',
+            'phone' => '555-1234',
+            'username' => 'voltstack',
+            'status' => 'published',
+            'visibility' => 'public',
+            'marketing_opt_in' => 'yes',
+            'cancel_newsletter' => 'off',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+            'pin' => '1234',
+            'pin_repeat' => '1234',
+            'internal_code' => 'VS-001',
+            'support_code' => 'PRM-001',
+            'review_notes' => 'checked',
+            'items' => [
+                [
+                    'value' => 'alpha',
+                    'value_repeat' => 'alpha',
+                ],
+            ],
+        ], [
+            'terms' => [Rule::accepted()],
+            'opt_out' => [Rule::declined()],
+            'nickname' => [Rule::nullable(), Rule::string(), Rule::max(10)],
+            'phone' => [Rule::requiredWith(['email'])],
+            'username' => [Rule::requiredWithout('display_name')],
+            'visibility' => [Rule::in('public', 'private')],
+            'marketing_opt_in' => [Rule::acceptedIf('status', 'published')],
+            'cancel_newsletter' => [Rule::declinedIf(static fn(ValidationRuleContext $context): bool => ($context->data()['status'] ?? null) === 'published')],
+            'password' => [Rule::confirmed()],
+            'pin' => [Rule::same('pin_repeat')],
+            'internal_code' => [Rule::requiredIf('status', 'published')],
+            'support_code' => [Rule::requiredUnless('visibility', 'public')],
+            'review_notes' => [Rule::requiredUnless(static fn(ValidationRuleContext $context): bool => ($context->data()['status'] ?? null) === 'draft')],
+            'published_at' => [Rule::prohibitedIf('status', 'draft')],
+            'items.*.value' => [Rule::confirmed('items.*.value_repeat')],
+        ]);
+
+        self::assertSame([
+            'terms' => 'yes',
+            'opt_out' => 'off',
+            'nickname' => null,
+            'email' => 'user@example.com',
+            'phone' => '555-1234',
+            'username' => 'voltstack',
+            'status' => 'published',
+            'visibility' => 'public',
+            'marketing_opt_in' => 'yes',
+            'cancel_newsletter' => 'off',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+            'pin' => '1234',
+            'pin_repeat' => '1234',
+            'internal_code' => 'VS-001',
+            'support_code' => 'PRM-001',
+            'review_notes' => 'checked',
+            'items' => [
+                [
+                    'value' => 'alpha',
+                    'value_repeat' => 'alpha',
+                ],
+            ],
+        ], $validated);
+    }
+
+    public function test_validator_throws_errors_for_semantic_rule_objects_and_expressive_arguments(): void
+    {
+        $validator = new Validator();
+
+        try {
+            $validator->validate([
+                'terms' => 'no',
+                'opt_out' => 'yes',
+                'nickname' => null,
+                'email' => 'user@example.com',
+                'status' => 'draft',
+                'visibility' => 'friends-only',
+                'marketing_opt_in' => 'no',
+                'cancel_newsletter' => 'yes',
+                'password' => 'secret123',
+                'password_confirmation' => 'different',
+                'pin' => '1234',
+                'pin_repeat' => '0000',
+                'flagged' => true,
+                'published_at' => '2026-05-29',
+                'items' => [
+                    [
+                        'value' => 'alpha',
+                        'value_repeat' => 'beta',
+                    ],
+                ],
+            ], [
+                'terms' => [Rule::accepted()],
+                'opt_out' => [Rule::declined()],
+                'nickname' => [Rule::nullable(), Rule::string(), Rule::max(10)],
+                'phone' => [Rule::requiredWith('email')],
+                'username' => [Rule::requiredWithout('display_name')],
+                'visibility' => [Rule::in('public', 'private')],
+                'marketing_opt_in' => [Rule::acceptedIf('status', 'draft', 'published')],
+                'cancel_newsletter' => [Rule::declinedIf('status', 'draft', 'published')],
+                'password' => [Rule::confirmed()],
+                'pin' => [Rule::same('pin_repeat')],
+                'internal_code' => [Rule::requiredIf('status', 'draft', 'published')],
+                'support_code' => [Rule::requiredUnless('visibility', 'public', 'private')],
+                'review_notes' => [Rule::requiredIf(static fn(ValidationRuleContext $context): bool => ($context->data()['flagged'] ?? false) === true)],
+                'audit_reason' => [Rule::requiredUnless(static fn(ValidationRuleContext $context): bool => ($context->data()['status'] ?? null) === 'archived')],
+                'published_at' => [Rule::prohibitedIf('status', 'draft')],
+                'items.*.value' => [Rule::confirmed('items.*.value_repeat')],
+            ], [
+                'terms.accepted' => 'Debes aceptar :attribute.',
+                'opt_out.declined' => 'El campo :attribute debe estar desactivado.',
+                'phone.required_with' => 'El campo :attribute es obligatorio cuando alguno de :values esta presente.',
+                'username.required_without' => 'El campo :attribute es obligatorio cuando falta alguno de :values.',
+                'visibility.in' => 'La :attribute seleccionada no es valida.',
+                'marketing_opt_in.accepted_if' => 'Debes aceptar :attribute cuando :other es :value.',
+                'cancel_newsletter.declined_if' => 'El campo :attribute debe estar desactivado cuando :other es :value.',
+                'password.confirmed' => 'La confirmacion de :attribute no coincide.',
+                'pin.same' => 'El campo :attribute debe coincidir con :other.',
+                'internal_code.required_if' => 'El campo :attribute es obligatorio cuando :other es :value.',
+                'review_notes.required_if' => 'El campo :attribute es obligatorio cuando el registro esta marcado.',
+                'support_code.required_unless' => 'El campo :attribute es obligatorio salvo que :other este en :values.',
+                'audit_reason.required_unless' => 'El campo :attribute es obligatorio salvo que el estado sea archivado.',
+                'published_at.prohibited_if' => 'El campo :attribute esta prohibido cuando :other es :value.',
+                'items.*.value.confirmed' => 'La confirmacion de :attribute no coincide.',
+            ], [
+                'terms' => 'terminos',
+                'opt_out' => 'baja',
+                'phone' => 'telefono',
+                'username' => 'usuario',
+                'visibility' => 'visibilidad',
+                'marketing_opt_in' => 'suscripcion',
+                'cancel_newsletter' => 'cancelacion',
+                'password' => 'contrasena',
+                'pin' => 'pin',
+                'pin_repeat' => 'repeticion del pin',
+                'internal_code' => 'codigo interno',
+                'review_notes' => 'notas de revision',
+                'support_code' => 'codigo de soporte',
+                'audit_reason' => 'motivo de auditoria',
+                'status' => 'estado',
+                'published_at' => 'fecha de publicacion',
+                'items.*.value' => 'valor del item',
+            ]);
+
+            self::fail('ValidationException was not thrown.');
+        } catch (ValidationException $exception) {
+            self::assertSame([
+                'terms' => ['Debes aceptar terminos.'],
+                'opt_out' => ['El campo baja debe estar desactivado.'],
+                'phone' => ['El campo telefono es obligatorio cuando alguno de email esta presente.'],
+                'username' => ['El campo usuario es obligatorio cuando falta alguno de display_name.'],
+                'visibility' => ['La visibilidad seleccionada no es valida.'],
+                'marketing_opt_in' => ['Debes aceptar suscripcion cuando estado es draft, published.'],
+                'cancel_newsletter' => ['El campo cancelacion debe estar desactivado cuando estado es draft, published.'],
+                'password' => ['La confirmacion de contrasena no coincide.'],
+                'pin' => ['El campo pin debe coincidir con repeticion del pin.'],
+                'internal_code' => ['El campo codigo interno es obligatorio cuando estado es draft, published.'],
+                'support_code' => ['El campo codigo de soporte es obligatorio salvo que visibilidad este en public, private.'],
+                'review_notes' => ['El campo notas de revision es obligatorio cuando el registro esta marcado.'],
+                'audit_reason' => ['El campo motivo de auditoria es obligatorio salvo que el estado sea archivado.'],
+                'published_at' => ['El campo fecha de publicacion esta prohibido cuando estado es draft.'],
+                'items.0.value' => ['La confirmacion de valor del item no coincide.'],
+            ], $exception->errors());
+        }
+    }
 }
