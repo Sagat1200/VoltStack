@@ -23,6 +23,203 @@ final class ValidatedInput implements ArrayAccess, Countable, IteratorAggregate,
         return $this->data;
     }
 
+    public function toArray(): array
+    {
+        return $this->all();
+    }
+
+    public function merge(array|self $items): self
+    {
+        return new self(array_replace_recursive(
+            $this->data,
+            $items instanceof self ? $items->all() : $items,
+        ));
+    }
+
+    public function collect(): ArrayIterator
+    {
+        return new ArrayIterator($this->all());
+    }
+
+    public function keys(): array
+    {
+        return array_keys($this->data);
+    }
+
+    public function values(): array
+    {
+        return array_values($this->data);
+    }
+
+    public function contains(mixed $needle): bool
+    {
+        if (is_callable($needle)) {
+            foreach ($this->data as $key => $value) {
+                if ($needle($value, $key) === true) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return in_array($needle, $this->data, true);
+    }
+
+    public function pluck(string $value, ?string $key = null): array
+    {
+        $result = [];
+
+        foreach ($this->data as $item) {
+            if (!is_array($item) || !$this->hasArrayValue($item, $value)) {
+                continue;
+            }
+
+            $pluckedValue = $this->getArrayValue($item, $value);
+
+            if ($key === null || !$this->hasArrayValue($item, $key)) {
+                $result[] = $pluckedValue;
+                continue;
+            }
+
+            $pluckedKey = $this->getArrayValue($item, $key);
+
+            if (is_int($pluckedKey) || is_string($pluckedKey)) {
+                $result[$pluckedKey] = $pluckedValue;
+                continue;
+            }
+
+            $result[] = $pluckedValue;
+        }
+
+        return $result;
+    }
+
+    public function reduce(callable $callback, mixed $initial = null): mixed
+    {
+        $accumulator = $initial;
+
+        foreach ($this->data as $key => $value) {
+            $accumulator = $callback($accumulator, $value, $key);
+        }
+
+        return $accumulator;
+    }
+
+    public function every(callable $callback): bool
+    {
+        foreach ($this->data as $key => $value) {
+            if ($callback($value, $key) !== true) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function some(callable $callback): bool
+    {
+        foreach ($this->data as $key => $value) {
+            if ($callback($value, $key) === true) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function partition(callable $callback): array
+    {
+        $matches = [];
+        $rejects = [];
+
+        foreach ($this->data as $key => $value) {
+            if ($callback($value, $key) === true) {
+                $matches[$key] = $value;
+                continue;
+            }
+
+            $rejects[$key] = $value;
+        }
+
+        return [new self($matches), new self($rejects)];
+    }
+
+    public function sort(?callable $callback = null): self
+    {
+        $result = $this->data;
+
+        if ($callback === null) {
+            asort($result);
+        } else {
+            uasort($result, $callback);
+        }
+
+        return new self($result);
+    }
+
+    public function sortByKeys(?callable $callback = null): self
+    {
+        $result = $this->data;
+
+        if ($callback === null) {
+            ksort($result);
+        } else {
+            uksort($result, $callback);
+        }
+
+        return new self($result);
+    }
+
+    public function reverse(): self
+    {
+        return new self(array_reverse($this->data, true));
+    }
+
+    public function slice(int $offset, ?int $length = null): self
+    {
+        return new self(array_slice($this->data, $offset, $length, true));
+    }
+
+    public function map(callable $callback): self
+    {
+        $result = [];
+
+        foreach ($this->data as $key => $value) {
+            $result[$key] = $callback($value, $key);
+        }
+
+        return new self($result);
+    }
+
+    public function filter(?callable $callback = null): self
+    {
+        $result = [];
+
+        foreach ($this->data as $key => $value) {
+            $keep = $callback !== null
+                ? (bool) $callback($value, $key)
+                : $this->isFilledValue($value);
+
+            if ($keep) {
+                $result[$key] = $value;
+            }
+        }
+
+        return new self($result);
+    }
+
+    public function first(?callable $callback = null, mixed $default = null): mixed
+    {
+        foreach ($this->data as $key => $value) {
+            if ($callback === null || $callback($value, $key) === true) {
+                return $value;
+            }
+        }
+
+        return $default;
+    }
+
     public function get(?string $key = null, mixed $default = null): mixed
     {
         if ($key === null) {
@@ -128,7 +325,7 @@ final class ValidatedInput implements ArrayAccess, Countable, IteratorAggregate,
 
     public function getIterator(): Traversable
     {
-        return new ArrayIterator($this->data);
+        return $this->collect();
     }
 
     public function jsonSerialize(): array

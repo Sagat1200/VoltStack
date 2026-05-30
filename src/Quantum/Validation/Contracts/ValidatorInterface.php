@@ -8,7 +8,13 @@ use Quantum\Validation\ValidationException;
 
 interface ValidatorInterface
 {
+    public function after(callable $callback): static;
+
+    public function stopOnFirstFailure(bool $value = true): static;
+
     /**
+     * @param array<string, array<int, string|RuleInterface>|string|RuleInterface> $rules
+     *
      * @throws ValidationException
      */
     public function validate(
