@@ -121,6 +121,38 @@ final class ControllerDispatcherTest extends TestCase
             'name' => 'VoltStack',
         ], $result);
     }
+
+    public function test_form_request_exposes_safe_only_and_except_helpers(): void
+    {
+        $app = $this->createApplication();
+        $route = new Route(['POST'], '/teams/{team}/safe', SafeFormRequestController::class . '@store');
+        $resolved = new ResolvedRoute($route, ['team' => 'core']);
+        $request = Request::create('POST', '/teams/core/safe', [], [
+            'email' => 'user@example.com',
+            'name' => 'VoltStack',
+        ])
+            ->withAttribute('route', $route)
+            ->withAttribute('route_parameters', ['team' => 'core'])
+            ->withAttribute('team', 'core');
+
+        $result = $app->controllers()->dispatchResolvedRoute($resolved, $request);
+
+        self::assertSame([
+            'safe' => [
+                'team' => 'core',
+                'email' => 'user@example.com',
+                'name' => 'VoltStack',
+            ],
+            'only' => [
+                'team' => 'core',
+                'email' => 'user@example.com',
+            ],
+            'except' => [
+                'team' => 'core',
+                'email' => 'user@example.com',
+            ],
+        ], $result);
+    }
 }
 
 final class DispatcherController
@@ -213,5 +245,29 @@ final class HookedStoreUserRequest extends FormRequest
     protected function passedValidation(): void
     {
         self::$passed = true;
+    }
+}
+
+final class SafeFormRequestController
+{
+    public function store(SafeStoreUserRequest $request): array
+    {
+        return [
+            'safe' => $request->safe(),
+            'only' => $request->only(['email', 'team']),
+            'except' => $request->except('name'),
+        ];
+    }
+}
+
+final class SafeStoreUserRequest extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            'email' => ['required', 'email'],
+            'name' => ['required', 'string', 'min:3'],
+            'team' => ['required', 'string'],
+        ];
     }
 }

@@ -59,6 +59,25 @@ abstract class FormRequest
         return $this->validated[$key] ?? $default;
     }
 
+    public function safe(): array
+    {
+        return $this->validated();
+    }
+
+    public function only(array|string $keys): array
+    {
+        $keys = $this->normalizeKeys($keys);
+
+        return array_intersect_key($this->safe(), array_flip($keys));
+    }
+
+    public function except(array|string $keys): array
+    {
+        $keys = $this->normalizeKeys($keys);
+
+        return array_diff_key($this->safe(), array_flip($keys));
+    }
+
     public function all(): array
     {
         return $this->data;
@@ -186,5 +205,10 @@ abstract class FormRequest
             $this->query(),
             $this->input(),
         );
+    }
+
+    protected function normalizeKeys(array|string $keys): array
+    {
+        return is_array($keys) ? $keys : [$keys];
     }
 }

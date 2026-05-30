@@ -13,8 +13,7 @@ final class Validator implements ValidatorInterface
         array $rules,
         array $messages = [],
         array $attributes = []
-    ): array
-    {
+    ): array {
         $errors = [];
 
         foreach ($rules as $field => $fieldRules) {
@@ -25,6 +24,10 @@ final class Validator implements ValidatorInterface
             foreach ($fieldRules as $rule) {
                 [$name, $argument] = $this->parseRule($rule);
                 $ruleName = $this->normalizeRuleName($name);
+
+                if ($name === 'nullable' && $value === null) {
+                    break;
+                }
 
                 if ($name === 'required' && (!$present || $value === null || $value === '' || $value === [])) {
                     $errors[$field][] = $this->messageFor(
@@ -52,7 +55,74 @@ final class Validator implements ValidatorInterface
                     continue;
                 }
 
+                if ($name === 'array' && !is_array($value)) {
+                    $errors[$field][] = $this->messageFor(
+                        $field,
+                        $name,
+                        $ruleName,
+                        $messages,
+                        $attributes,
+                    );
+                    continue;
+                }
+
+                if ($name === 'numeric' && !is_numeric($value)) {
+                    $errors[$field][] = $this->messageFor(
+                        $field,
+                        $name,
+                        $ruleName,
+                        $messages,
+                        $attributes,
+                    );
+                    continue;
+                }
+
                 if (($name === 'int' || $name === 'integer') && filter_var($value, FILTER_VALIDATE_INT) === false) {
+                    $errors[$field][] = $this->messageFor(
+                        $field,
+                        $name,
+                        $ruleName,
+                        $messages,
+                        $attributes,
+                    );
+                    continue;
+                }
+
+                if ($name === 'boolean' && !$this->passesBooleanRule($value)) {
+                    $errors[$field][] = $this->messageFor(
+                        $field,
+                        $name,
+                        $ruleName,
+                        $messages,
+                        $attributes,
+                    );
+                    continue;
+                }
+
+                if ($name === 'confirmed' && !$this->passesConfirmedRule($field, $value, $data)) {
+                    $errors[$field][] = $this->messageFor(
+                        $field,
+                        $name,
+                        $ruleName,
+                        $messages,
+                        $attributes,
+                    );
+                    continue;
+                }
+
+                if ($name === 'same' && $argument !== null && !$this->passesSameRule($value, $data[$argument] ?? null)) {
+                    $errors[$field][] = $this->messageFor(
+                        $field,
+                        $name,
+                        $ruleName,
+                        $messages,
+                        $attributes,
+                        ['other' => $attributes[$argument] ?? $argument],
+                    );
+                    continue;
+                }
+
+                if ($name === 'in' && $argument !== null && !$this->passesInRule($value, explode(',', $argument))) {
                     $errors[$field][] = $this->messageFor(
                         $field,
                         $name,
@@ -82,6 +152,18 @@ final class Validator implements ValidatorInterface
                         $messages,
                         $attributes,
                         ['min' => (string) (int) $argument],
+                    );
+                    continue;
+                }
+
+                if ($name === 'max' && $argument !== null && !$this->passesMaxRule($value, (int) $argument)) {
+                    $errors[$field][] = $this->messageFor(
+                        $field,
+                        $name,
+                        $ruleName,
+                        $messages,
+                        $attributes,
+                        ['max' => (string) (int) $argument],
                     );
                 }
             }
@@ -168,11 +250,46 @@ final class Validator implements ValidatorInterface
         return match ($rule) {
             'required' => 'The :attribute field is required.',
             'string' => 'The :attribute field must be a string.',
+            'array' => 'The :attribute field must be an array.',
+            'boolean' => 'The :attribute field must be true or false.',
+            'confirmed' => 'The :attribute field confirmation does not match.',
             'integer' => 'The :attribute field must be an integer.',
+            'numeric' => 'The :attribute field must be a number.',
             'email' => 'The :attribute field must be a valid email address.',
+            'same' => 'The :attribute field and :other must match.',
+            'in' => 'The selected :attribute is invalid.',
             'min' => 'The :attribute field must be at least :min.',
+            'max' => 'The :attribute field may not be greater than :max.',
             default => 'The :attribute field is invalid.',
         };
+    }
+
+    protected function passesBooleanRule(mixed $value): bool
+    {
+        return in_array($value, [true, false, 0, 1, '0', '1'], true);
+    }
+
+    protected function passesConfirmedRule(string $field, mixed $value, array $data): bool
+    {
+        $confirmationField = $field . '_confirmation';
+
+        if (!array_key_exists($confirmationField, $data)) {
+            return false;
+        }
+
+        return $this->passesSameRule($value, $data[$confirmationField]);
+    }
+
+    protected function passesSameRule(mixed $value, mixed $other): bool
+    {
+        return $value === $other;
+    }
+
+    protected function passesInRule(mixed $value, array $allowed): bool
+    {
+        $allowed = array_map(static fn(mixed $item): string => (string) $item, $allowed);
+
+        return in_array((string) $value, $allowed, true);
     }
 
     protected function passesMinRule(mixed $value, int $minimum): bool
@@ -187,6 +304,23 @@ final class Validator implements ValidatorInterface
 
         if (is_array($value)) {
             return count($value) >= $minimum;
+        }
+
+        return false;
+    }
+
+    protected function passesMaxRule(mixed $value, int $maximum): bool
+    {
+        if (is_numeric($value)) {
+            return (float) $value <= $maximum;
+        }
+
+        if (is_string($value)) {
+            return mb_strlen($value) <= $maximum;
+        }
+
+        if (is_array($value)) {
+            return count($value) <= $maximum;
         }
 
         return false;
